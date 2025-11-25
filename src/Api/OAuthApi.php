@@ -30,8 +30,8 @@ class OAuthApi
     {
         $params = [
             'appId'       => $this->appId,
-            'scope'       => urlencode(json_encode($scopes)),
-            'redirectUri' => urlencode($redirectUri),
+            'scope'       => json_encode($scopes),
+            'redirectUri' => $redirectUri,
             'state'       => $state
         ];
 

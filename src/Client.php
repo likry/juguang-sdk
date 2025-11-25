@@ -1,93 +1,46 @@
 <?php
 
-namespace Juguang\SDK;
+namespace likry\juguangSdk;
 
-use Juguang\SDK\Api\OAuthApi;
-use Juguang\SDK\Http\Request;
+use likry\juguangSdk\Api\AccountApi;
+use likry\juguangSdk\Api\OAuthApi;
+use likry\juguangSdk\Api\ReportApi;
+use likry\juguangSdk\Http\Request;
+use likry\juguangSdk\Exception\JuguangSDKException;
 
 class Client
 {
-    /**
-     * 应用ID
-     * @var int
-     */
-    protected $appId;
+    private int     $appId;
+    private string  $secret;
+    private ?string $accessToken;
+    private Request $request;
+    /** @var OAuthApi|null OAuth API实例 */
+    private ?OAuthApi $oauthApi = null;
+    /** @var AccountApi|null 账户API实例 */
+    private ?AccountApi $accountApi = null;
+    /** @var ReportApi|null 报表API实例 */
+    private ?ReportApi $reportApi = null;
 
-    /**
-     * 应用密钥
-     * @var string
-     */
-    protected $secret;
-
-    /**
-     * 访问令牌
-     * @var string|null
-     */
-    protected $accessToken;
-
-    /**
-     * 刷新令牌
-     * @var string|null
-     */
-    protected $refreshToken;
-
-    /**
-     * HTTP请求实例
-     * @var Request|null
-     */
-    protected $request;
-
-    /**
-     * OAuth API实例
-     * @var OAuthApi|null
-     */
-    protected $oauthApi;
-
-    /**
-     * Client constructor.
-     *
-     * @param int $appId 应用ID
-     * @param string $secret 应用密钥
-     */
-    public function __construct(int $appId, string $secret)
+    public function __construct(int $appId, string $secret, ?Request $request = null)
     {
-        $this->appId = $appId;
-        $this->secret = $secret;
-    }
-
-    /**
-     * 获取HTTP请求实例
-     *
-     * @return Request
-     */
-    protected function getRequest(): Request
-    {
-        if (!$this->request) {
-            $this->request = new Request();
+        if (empty($appId)) {
+            throw JuguangSDKException::invalidConfig('App ID不能为空');
         }
-        
-        return $this->request;
-    }
 
-    /**
-     * 获取OAuth API实例
-     *
-     * @return OAuthApi
-     */
-    protected function getOAuthApi(): OAuthApi
-    {
-        if (!$this->oauthApi) {
-            $this->oauthApi = new OAuthApi($this->getRequest(), $this->appId, $this->secret);
+        if (empty($secret)) {
+            throw JuguangSDKException::invalidConfig('Secret不能为空');
         }
-        
-        return $this->oauthApi;
+
+        $this->appId   = $appId;
+        $this->secret  = $secret;
+        $this->request = $request ?: new Request();
     }
 
     /**
      * 设置访问令牌
      *
      * @param string $accessToken
-     * @return $this
+     * @return self
      */
     public function setAccessToken(string $accessToken): self
     {
@@ -96,87 +49,168 @@ class Client
     }
 
     /**
-     * 设置刷新令牌
+     * 获取访问令牌
      *
-     * @param string $refreshToken
-     * @return $this
+     * @return string|null
      */
-    public function setRefreshToken(string $refreshToken): self
+    public function getAccessToken(): ?string
     {
-        $this->refreshToken = $refreshToken;
+        return $this->accessToken;
+    }
+
+    /**
+     * 获取应用ID
+     *
+     * @return int
+     */
+    public function getAppId(): int
+    {
+        return $this->appId;
+    }
+
+    /**
+     * 获取OAuth API实例
+     *
+     * @return OAuthApi
+     */
+    public function oauth(): OAuthApi
+    {
+        if ($this->oauthApi === null) {
+            $this->oauthApi = new OAuthApi($this->appId, $this->secret, $this->request);
+        }
+
+        return $this->oauthApi;
+    }
+
+    /**
+     * @return AccountApi
+     * @throws JuguangSDKException
+     */
+    public function account(): AccountApi
+    {
+        if ($this->accessToken === null) {
+            throw JuguangSDKException::invalidConfig('使用账户API需要先设置Access Token');
+        }
+        if ($this->accountApi === null) {
+            $this->accountApi = new AccountApi($this->accessToken, $this->request);
+        }
+        return $this->accountApi;
+    }
+
+    public function report(): ReportApi
+    {
+        if ($this->accessToken === null) {
+            throw JuguangSDKException::invalidConfig('使用报表API需要先设置Access Token');
+        }
+        if ($this->reportApi === null) {
+            $this->reportApi = new ReportApi($this->accessToken, $this->request);
+        }
+        return $this->reportApi;
+    }
+
+    /**
+     * 授权流程：获取Access Token并自动设置
+     *
+     * @param string $authCode 授权码
+     * @return array
+     * @throws JuguangSDKException
+     */
+    public function authenticate(string $authCode): array
+    {
+        $tokenData = $this->oauth()->getAccessToken($authCode);
+        $this->setAccessToken($tokenData['access_token']);
+
+        return $tokenData;
+    }
+
+    /**
+     * 刷新Access Token并自动设置
+     *
+     * @param string $refreshToken 刷新令牌
+     * @return array
+     * @throws JuguangSDKException
+     */
+    public function refresh(string $refreshToken): array
+    {
+        $tokenData = $this->oauth()->refreshAccessToken($refreshToken);
+        $this->setAccessToken($tokenData['access_token']);
+
+        return $tokenData;
+    }
+
+    /**
+     * 生成授权URL
+     *
+     * @param array  $scopes      权限范围
+     * @param string $redirectUri 回调地址
+     * @param string $state       自定义参数
+     * @return string
+     */
+    public function generateAuthUrl(array $scopes, string $redirectUri, string $state = ''): string
+    {
+        return $this->oauth()->getAuthorizationUrl($scopes, $redirectUri, $state);
+    }
+
+    /**
+     * 设置请求超时时间
+     *
+     * @param int $timeout 超时时间（秒）
+     * @return self
+     */
+    public function setTimeout(int $timeout): self
+    {
+        $this->request->setTimeout($timeout);
         return $this;
     }
 
     /**
-     * 获取授权URL
+     * 设置自定义请求头
      *
-     * @param array $scopes 权限范围
-     * @param string $redirectUri 回调地址
-     * @param string $state 自定义参数
-     * @return string
+     * @param array $headers
+     * @return self
      */
-    public function getAuthUrl(array $scopes, string $redirectUri, string $state = ''): string
+    public function setHeaders(array $headers): self
     {
-        return $this->getOAuthApi()->getAuthUrl($scopes, $redirectUri, $state);
+        $this->request->setHeaders($headers);
+        return $this;
     }
 
     /**
-     * 获取访问令牌
+     * 快速创建客户端实例
      *
-     * @param string $authCode 授权码
-     * @return array
-     * @throws \Exception
+     * @param int         $appId
+     * @param string      $secret
+     * @param string|null $accessToken
+     * @return self
      */
-    public function getAccessToken(string $authCode): array
+    public static function create(int $appId, string $secret, ?string $accessToken = null): self
     {
-        $response = $this->getOAuthApi()->getAccessToken($authCode);
-        
-        if ($response['success']) {
-            $this->accessToken = $response['data']['access_token'];
-            $this->refreshToken = $response['data']['refresh_token'];
+        $client = new self($appId, $secret);
+
+        if ($accessToken !== null) {
+            $client->setAccessToken($accessToken);
         }
 
-        return $response;
+        return $client;
     }
 
     /**
-     * 刷新访问令牌
+     * 从配置数组创建客户端实例
      *
-     * @return array
-     * @throws \Exception
+     * @param array $config 配置数组，包含 app_id, secret, access_token（可选）
+     * @return self
+     * @throws JuguangSDKException
      */
-    public function refreshToken(): array
+    public static function fromConfig(array $config): self
     {
-        if (!$this->refreshToken) {
-            throw new \Exception('Refresh token is required');
+        if (!isset($config['app_id'], $config['secret'])) {
+            throw JuguangSDKException::invalidConfig('配置数组必须包含 app_id 和 secret');
         }
 
-        $response = $this->getOAuthApi()->refreshToken($this->refreshToken);
-
-        if ($response['success']) {
-            $this->accessToken = $response['data']['access_token'];
-            $this->refreshToken = $response['data']['refresh_token'];
-        }
-
-        return $response;
-    }
-
-    /**
-     * 通用API调用方法
-     *
-     * @param string $method HTTP方法 (GET, POST, PUT, DELETE等)
-     * @param string $uri API路径
-     * @param array $params 请求参数
-     * @param array $headers 额外的请求头
-     * @return array
-     * @throws \Exception
-     */
-    public function call(string $method, string $uri, array $params = [], array $headers = []): array
-    {
-        if ($this->accessToken) {
-            $headers['Access-Token'] = $this->accessToken;
-        }
-
-        return $this->getRequest()->send($method, $uri, $params, $headers);
+        return self::create(
+            (int)$config['app_id'],
+            (string)$config['secret'],
+            $config['access_token'] ?? null
+        );
     }
 }

@@ -1,39 +1,51 @@
 {
-    "name": "likry/juguang-sdk",
-    "description": "小红书聚光平台PHP SDK",
-    "type": "library",
-    "license": "MIT",
-    "authors": [
-        {
-            "name": "likry",
-            "email": "493395100@qq.com"
-        }
-    ],
-    "keywords": [
-        "xiaohongshu",
-        "juguang",
-        "sdk",
-        "api",
-        "advertising"
-    ],
-    "require": {
-        "php": ">=7.4",
-        "ext-curl": "*",
-        "ext-json": "*"
-    },
-    "require-dev": {
-        "phpunit/phpunit": "^9.0"
-    },
-    "autoload": {
-        "psr-4": {
-            "Juguang\\SDK\\": "src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Juguang\\SDK\\Tests\\": "tests/"
-        }
-    },
-    "minimum-stability": "stable",
-    "prefer-stable": true
+  "name": "likry/juguang-sdk",
+  "description": "小红书聚光平台PHP SDK",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "likry",
+      "email": "493395100@qq.com"
+    }
+  ],
+  "keywords": [
+    "xiaohongshu",
+    "juguang",
+    "sdk",
+    "api",
+    "advertising",
+    "oauth",
+    "finance"
+  ],
+  "homepage": "https://github.com/likry/juguang-sdk",
+  "readme": "README.md",
+  "require": {
+    "php": ">=7.4",
+    "ext-curl": "*",
+    "ext-json": "*"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "likry\\juguangSdk\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "likry\\juguangSdk\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit",
+    "example": "php example.php"
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "config": {
+    "sort-packages": true,
+    "optimize-autoloader": true
+  }
 }

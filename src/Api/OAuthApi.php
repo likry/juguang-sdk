@@ -1,97 +1,123 @@
 <?php
 
-namespace Juguang\SDK\Api;
+namespace likry\juguangSdk\Api;
 
-use Juguang\SDK\Http\Request;
+use likry\juguangSdk\Http\Request;
+use likry\juguangSdk\Exception\JuguangSDKException;
 
 class OAuthApi
 {
-    /**
-     * @var Request
-     */
-    protected $request;
+    private Request $request;
+    private int    $appId;
+    private string $secret;
 
-    /**
-     * @var int
-     */
-    protected $appId;
-
-    /**
-     * @var string
-     */
-    protected $secret;
-
-    /**
-     * OAuthApi constructor.
-     *
-     * @param Request $request
-     * @param int $appId
-     * @param string $secret
-     */
-    public function __construct(Request $request, int $appId, string $secret)
+    public function __construct(int $appId, string $secret, ?Request $request = null)
     {
-        $this->request = $request;
-        $this->appId = $appId;
-        $this->secret = $secret;
+        $this->appId   = $appId;
+        $this->secret  = $secret;
+        $this->request = $request ?: new Request();
     }
 
     /**
-     * 获取授权URL
+     * 生成授权URL
      *
-     * @param array $scopes 权限范围
+     * @param array  $scopes      权限范围，如 ['report_service', 'ad_query']
      * @param string $redirectUri 回调地址
-     * @param string $state 自定义参数
+     * @param string $state       自定义参数
      * @return string
      */
-    public function getAuthUrl(array $scopes, string $redirectUri, string $state = ''): string
+    public function getAuthorizationUrl(array $scopes, string $redirectUri, string $state = ''): string
     {
         $params = [
-            'appId' => $this->appId,
-            'scope' => json_encode($scopes),
-            'redirectUri' => $redirectUri,
-            'state' => $state
+            'appId'       => $this->appId,
+            'scope'       => json_encode($scopes),
+            'redirectUri' => urlencode($redirectUri),
+            'state'       => $state
         ];
 
         return 'https://ad-market.xiaohongshu.com/auth?' . http_build_query($params);
     }
 
     /**
-     * 获取访问令牌
+     * 获取Access Token
      *
      * @param string $authCode 授权码
      * @return array
-     * @throws \Exception
+     * @throws JuguangSDKException
      */
     public function getAccessToken(string $authCode): array
     {
-        $url = '/api/open/oauth2/access_token';
-        
-        $params = [
-            'app_id' => $this->appId,
-            'secret' => $this->secret,
-            'auth_code' => $authCode
+        $data = [
+            'app_id'    => $this->appId,
+            'secret'    => $this->secret,
+            'auth_code' => $authCode,
         ];
 
-        return $this->request->send('POST', $url, $params);
+        $response = $this->request->post('/api/open/oauth2/access_token', $data);
+
+        if (!$response['success']) {
+            throw JuguangSDKException::apiError(
+                $response['msg'] ?? '获取Access Token失败',
+                $response['code'] ?? 'UNKNOWN_ERROR',
+                $response
+            );
+        }
+
+        return $response['data'];
     }
 
     /**
-     * 刷新访问令牌
+     * 刷新Access Token
      *
      * @param string $refreshToken 刷新令牌
      * @return array
-     * @throws \Exception
+     * @throws JuguangSDKException
      */
-    public function refreshToken(string $refreshToken): array
+    public function refreshAccessToken(string $refreshToken): array
     {
-        $url = '/api/open/oauth2/refresh_token';
-
-        $params = [
-            'app_id' => $this->appId,
-            'secret' => $this->secret,
-            'refresh_token' => $refreshToken
+        $data = [
+            'app_id'        => $this->appId,
+            'secret'        => $this->secret,
+            'refresh_token' => $refreshToken,
         ];
 
-        return $this->request->send('POST', $url, $params);
+        $response = $this->request->post('/api/open/oauth2/refresh_token', $data);
+
+        if (!$response['success']) {
+            throw JuguangSDKException::apiError(
+                $response['msg'] ?? '刷新Access Token失败',
+                $response['code'] ?? 'UNKNOWN_ERROR',
+                $response
+            );
+        }
+
+        return $response['data'];
+    }
+
+    /**
+     * 获取可用的权限范围
+     *
+     * @return array
+     */
+    public function getAvailableScopes(): array
+    {
+        return [
+            'report_service' => '获取账户报表信息',
+            'ad_query'       => '获取推广计划、推广单元、推广创意信息',
+            'ad_manage'      => '创建&修改推广计划、推广单元、推广创意',
+            'account_manage' => '账户管理',
+        ];
+    }
+
+    /**
+     * 验证权限范围是否有效
+     *
+     * @param array $scopes
+     * @return bool
+     */
+    public function validateScopes(array $scopes): bool
+    {
+        $availableScopes = array_keys($this->getAvailableScopes());
+        return !array_diff($scopes, $availableScopes);
     }
 }

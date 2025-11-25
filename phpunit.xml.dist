@@ -1,5 +1,0 @@
-<?php
-
-return [
-    'bootstrap' => \PHPUnit\Runner\Version::class,
-];

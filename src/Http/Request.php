@@ -1,70 +1,103 @@
 <?php
 
-namespace Juguang\SDK\Http;
+namespace likry\juguangSdk\Http;
+
+use likry\juguangSdk\Exception\JuguangSDKException;
 
 class Request
 {
-    /**
-     * API基础URL
-     * @var string
-     */
-    protected $baseUrl = 'https://adapi.xiaohongshu.com';
+    private const BASE_URL = 'https://adapi.xiaohongshu.com';
+    private int   $timeout = 30;
+    private array $headers = [];
 
-    /**
-     * 发送HTTP请求
-     *
-     * @param string $method 请求方法
-     * @param string $url 请求URL
-     * @param array $params 请求参数
-     * @param array $headers 请求头
-     * @return array
-     * @throws \Exception
-     */
-    public function send(string $method, string $url, array $params = [], array $headers = []): array
+    public function __construct(?int $timeout = null, array $headers = [])
     {
-        // 如果URL不是绝对路径，则加上基础URL
-        if (strpos($url, 'http') !== 0) {
-            $url = $this->baseUrl . $url;
+        if ($timeout !== null) {
+            $this->timeout = $timeout;
         }
 
+        $this->headers = array_merge([
+            'Content-Type' => 'application/json',
+        ], $headers);
+    }
+
+    public function get(string $url, array $params = [], array $headers = []): array
+    {
+        $queryString = !empty($params) ? '?' . http_build_query($params) : '';
+        return $this->request('GET', $url . $queryString, null, $headers);
+    }
+
+    public function post(string $url, ?array $data = null, array $headers = []): array
+    {
+        return $this->request('POST', $url, $data, $headers);
+    }
+
+    private function request(string $method, string $url, ?array $data = null, array $headers = []): array
+    {
+        $fullUrl        = $this->buildUrl($url);
+        $requestHeaders = array_merge($this->headers, $headers);
+
         $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $fullUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => $this->timeout,
+            CURLOPT_CUSTOMREQUEST  => $method,
+            CURLOPT_HTTPHEADER     => $this->formatHeaders($requestHeaders),
+        ]);
 
-        // 设置默认头部
-        $defaultHeaders = [
-            'Content-Type: application/json',
-        ];
-        
-        $headers = array_merge($defaultHeaders, $headers);
-
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-
-        if ($method === 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
+        if ($method === 'POST' && $data !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data, JSON_UNESCAPED_UNICODE));
         }
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
+        $error    = curl_error($ch);
         curl_close($ch);
 
         if ($error) {
-            throw new \Exception('Curl Error: ' . $error);
+            throw JuguangSDKException::networkError("网络请求失败: {$error}");
         }
 
         if ($httpCode >= 400) {
-            throw new \Exception('HTTP Error: ' . $httpCode);
+            throw JuguangSDKException::networkError("HTTP请求失败: {$httpCode}");
         }
 
-        $result = json_decode($response, true);
-        
+        $responseData = json_decode($response, true);
+
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \Exception('JSON decode error: ' . json_last_error_msg());
+            throw JuguangSDKException::invalidResponse("响应格式错误: " . json_last_error_msg());
         }
 
-        return $result ?: [];
+        return $responseData;
+    }
+
+    private function buildUrl(string $url): string
+    {
+        if (strpos($url, 'http') === 0) {
+            return $url;
+        }
+        return self::BASE_URL . $url;
+    }
+
+    private function formatHeaders(array $headers): array
+    {
+        $formatted = [];
+        foreach ($headers as $key => $value) {
+            $formatted[] = "{$key}: {$value}";
+        }
+        return $formatted;
+    }
+
+    public function setTimeout(int $timeout): self
+    {
+        $this->timeout = $timeout;
+        return $this;
+    }
+
+    public function setHeaders(array $headers): self
+    {
+        $this->headers = array_merge($this->headers, $headers);
+        return $this;
     }
 }

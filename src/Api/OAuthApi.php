@@ -8,8 +8,8 @@ use likry\juguangSdk\Exception\JuguangSDKException;
 class OAuthApi
 {
     private Request $request;
-    private int    $appId;
-    private string $secret;
+    private int     $appId;
+    private string  $secret;
 
     public function __construct(int $appId, string $secret, ?Request $request = null)
     {
@@ -30,7 +30,7 @@ class OAuthApi
     {
         $params = [
             'appId'       => $this->appId,
-            'scope'       => json_encode($scopes),
+            'scope'       => urlencode(json_encode($scopes)),
             'redirectUri' => urlencode($redirectUri),
             'state'       => $state
         ];
